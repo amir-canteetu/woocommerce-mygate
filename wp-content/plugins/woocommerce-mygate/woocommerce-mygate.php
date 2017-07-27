@@ -13,11 +13,11 @@
  * @package           Mygate
  *
  * @wordpress-plugin
- * Plugin Name:       mygate payment
- * Plugin URI:        https://github.com/amir-canteetu/mygate_woocommerce
- * Description:       This is a short description of what the plugin does. It's displayed in the WordPress admin area.
+ * Plugin Name:       WooCommerce Mygate
+ * Plugin URI:        https://github.com/amir-canteetu/woocommerce-mygate
+ * Description:       Woocommerce plugin for payments via Mygate payment gateway.
  * Version:           1.0.0
- * Author:            amir canteetu
+ * Author:            Amir Canteetu
  * Author URI:        https://github.com/amir-canteetu/
  * License:           GPL-2.0+
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
@@ -25,52 +25,115 @@
  * Domain Path:       /languages
  */
 
-// If this file is called directly, abort.
-if ( ! defined( 'WPINC' ) ) {
-	die;
-        
+if ( ! defined( 'ABSPATH' ) ) {
+	exit; // Exit if accessed directly.
 }
 
-/**
- * The code that runs during plugin activation.
- * This action is documented in includes/class-mygate-activator.php
- */
-function activate_mygate() {
-	require_once plugin_dir_path( __FILE__ ) . 'includes/class-mygate-activator.php';
-	Mygate_Activator::activate();
-}
+if ( ! class_exists( 'WC_Mygate' ) ) :
 
-/**
- * The code that runs during plugin deactivation.
- * This action is documented in includes/class-mygate-deactivator.php
- */
-function deactivate_mygate() {
-	require_once plugin_dir_path( __FILE__ ) . 'includes/class-mygate-deactivator.php';
-	Mygate_Deactivator::deactivate();
-}
+    /**
+     * WooCommerce Mygate main class.
+     */
+    class WC_Mygate {
 
-register_activation_hook( __FILE__, 'activate_mygate' );
-register_deactivation_hook( __FILE__, 'deactivate_mygate' );
+            /**
+             * Plugin version.
+             *
+             * @var string
+             */
+            const VERSION = '1.0.0';
 
-/**
- * The core plugin class that is used to define internationalization,
- * admin-specific hooks, and public-facing site hooks.
- */
-require plugin_dir_path( __FILE__ ) . 'includes/class-mygate.php';
+            /**
+             * Instance of this class.
+             *
+             * @var object
+             */
+            protected static $instance = null;
 
-/**
- * Begins execution of the plugin.
- *
- * Since everything within the plugin is registered via hooks,
- * then kicking off the plugin from this point in the file does
- * not affect the page life cycle.
- *
- * @since    1.0.0
- */
-function run_mygate() {
+            /**
+             * Initialize the plugin actions.
+             */
+            public function __construct() {
 
-	$plugin = new Mygate();
-	$plugin->run();
+                    add_action( 'init', array( $this, 'load_plugin_textdomain' ) );
 
-}
-run_mygate();
+                    if ( class_exists( 'WC_Payment_Gateway' ) ) {
+                            $this->includes();
+
+                            add_filter( 'woocommerce_payment_gateways', array( $this, 'add_gateway' ) );
+                            add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'plugin_action_links' ) );
+
+                    } else {
+                            add_action( 'admin_notices', array( $this, 'woocommerce_missing_notice' ) );
+                    }
+            }
+
+            /**
+             * Return an instance of this class.
+             *
+             * @return object A single instance of this class.
+             */
+            public static function get_instance() {
+                    // If the single instance hasn't been set, set it now.
+                    if ( null == self::$instance ) {
+                            self::$instance = new self;
+                    }
+
+                    return self::$instance;
+            }
+
+            /**
+             * Load the plugin text domain for translation.
+             */
+            public function load_plugin_textdomain() {
+                    load_plugin_textdomain( 'woocommerce-mygate', false, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
+            }
+
+            /**
+             * Includes.
+             */
+            private function includes() {
+                    include_once dirname( __FILE__ ) . '/includes/class-wc-mygate-gateway.php';
+            }
+
+            /**
+             * Action links.
+             *
+             * @param  array $links
+             *
+             * @return array
+             */
+            public function plugin_action_links( $links ) {
+                    $plugin_links = array();
+
+                    $plugin_links[] = '<a href="' . esc_url( admin_url( 'admin.php?page=wc-settings&tab=checkout&section=mygate' ) ) . '">' . __( 'Settings', 'woocommerce-mygate' ) . '</a>';
+
+                    return array_merge( $plugin_links, $links );
+            }
+
+            /**
+             * Add the gateway to WooCommerce.
+             *
+             * @param   array $methods WooCommerce payment methods.
+             *
+             * @return  array          Payment methods with Mygate.
+             */
+            public function add_gateway( $methods ) {
+                $methods[] = 'WC_Mygate_Gateway'; 
+                return $methods;                
+            }
+
+
+            /**
+             * WooCommerce fallback notice.
+             *
+             * @return string
+             */
+            public function woocommerce_missing_notice() {
+                    include dirname( __FILE__ ) . '/includes/views/html-notice-missing-woocommerce.php';
+            }
+    }
+
+    add_action( 'plugins_loaded', array( 'WC_Mygate', 'get_instance' ) );
+
+endif;
